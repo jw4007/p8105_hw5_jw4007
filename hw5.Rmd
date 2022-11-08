@@ -1,0 +1,107 @@
+---
+title: "hw5 jw4007"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggridges)
+library(patchwork)
+
+library(p8105.datasets)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+### q2
+#### import data
+```{r}
+homicide_csv = "https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv"
+
+homicide = read.csv(homicide_csv)
+```
+
+#### create the "city_state" variable and summarize within cities to obtain the total number of homicides and the number of unsolved homicides
+```{r}
+homicide = homicide %>%
+  mutate(city_state = str_c(city, state, sep = ","))
+
+describe = homicide %>%
+  group_by(city) %>%
+  summarize(total_cases = n(),
+            total_unsolved = sum(disposition == c("Closed without arrest", "Open/No arrest")))
+
+knitr::kable(describe)
+```
+After creating the "city_state" variable, there are `r nrow(homicide)` observations and `r ncol(homicide)` variables in the dataset. The variables are `r names(homicide)`. 
+The above table summarizes the total number of homicide cases and the number of unsolved homicides for the 50 large U.S. cities.
+
+```{r}
+describe_baltimore =
+  describe %>%
+  filter(city == "Baltimore") 
+
+baltimore_test = prop.test(
+  x = pull(describe_baltimore, total_unsolved),
+  n = pull(describe_baltimore, total_cases)) %>%
+  broom::tidy() %>%
+  select(estimate, conf.low, conf.high)
+
+knitr::kable(baltimore_test)
+```
+The above table describes the estimate the proportion of homicides that are unsolved and its confidence intervals from the city of Baltimore, MD.
+
+Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each. Do this within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns and unnest as necessary to create a tidy dataframe with estimated proportions and CIs for each city.
+```{r}
+city_prop_test_fun = function(city_df) {
+  
+  city_summary = city_df %>%
+  summarize(total_cases = n(),
+            total_unsolved = sum(disposition == c("Closed without arrest", "Open/No arrest")))
+  
+  test = 
+    prop.test(
+    x = pull(city_summary, total_unsolved),
+    n = pull(city_summary, total_cases)) %>%
+    broom::tidy() %>%
+    select(estimate, conf.low, conf.high)
+  
+  test
+}
+
+city_results =
+  homicide %>%
+  nest(data = uid:disposition) %>%
+  mutate(results = map(data, city_prop_test_fun)) %>%
+  select(city_state, results) %>%
+  unnest(results)
+
+```
+
+Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
+```{r}
+city_results %>%
+  mutate(city_state = fct_reorder(city_state, estimate)) %>%
+  ggplot(aes(x = city_state, y = estimate)) + geom_bar() + geom_errorbar(aes(ymin = conf.low, ymax = conf.high))
+``` 
+
+
+```{r}
+```
+
