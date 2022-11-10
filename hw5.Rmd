@@ -58,8 +58,8 @@ describe_baltimore =
   filter(city == "Baltimore") 
 
 baltimore_test = prop.test(
-  x = pull(describe_baltimore, total_unsolved),
-  n = pull(describe_baltimore, total_cases)) %>%
+  x = describe_baltimore[["total_unsolved"]],
+  n = describe_baltimore[["total_cases"]]) %>%
   broom::tidy() %>%
   select(estimate, conf.low, conf.high)
 
@@ -67,13 +67,12 @@ knitr::kable(baltimore_test)
 ```
 The above table describes the estimate the proportion of homicides that are unsolved and its confidence intervals from the city of Baltimore, MD.
 
-Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each. Do this within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns and unnest as necessary to create a tidy dataframe with estimated proportions and CIs for each city.
 ```{r}
 city_prop_test_fun = function(city_df) {
   
   city_summary = city_df %>%
-  summarize(total_cases = n(),
-            total_unsolved = sum(disposition == c("Closed without arrest", "Open/No arrest")))
+    summarize(total_cases = n(),
+              total_unsolved = sum(disposition == c("Closed without arrest", "Open/No arrest")))
   
   test = 
     prop.test(
@@ -94,14 +93,88 @@ city_results =
 
 ```
 
-Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
+
 ```{r}
 city_results %>%
   mutate(city_state = fct_reorder(city_state, estimate)) %>%
-  ggplot(aes(x = city_state, y = estimate)) + geom_bar() + geom_errorbar(aes(ymin = conf.low, ymax = conf.high))
+  ggplot(aes(x = estimate, y = city_state)) + geom_point() + geom_errorbar(aes(xmin = conf.low, xmax = conf.high)) + 
+  labs(
+    title = "Proportion of Unsolved Homicides"
+    , x = "Proportion"
+  )
 ``` 
+### q3
+First set the following design elements:
+
+Fix n=30
+Fix σ=5
+Set μ=0. Generate 5000 datasets from the model
+x∼Normal[μ,σ]
+
+First, create a list of 5000 data that follow x∼Normal[0,5] with the sample size equals to 30.
+```{r}
+norm_list = vector("list", length = 50)
+for (i in 1:50) {
+  norm_list[[i]] = rnorm(n = 30, sd = 5, mean = 0)
+}
+```
+
+Second, create a function that apply t test and reports the estimate values and p.values from the test.
+```{r}
+t_test = function(x) {
+  
+  results = t.test(x) %>% 
+  broom::tidy() %>%
+  select(estimate, p.value)
+  
+  results
+
+}
+```
+
+Third, construct a data frame combining the results of each iteration.
+```{r}
+test_results = tibble(
+  mu = 0,
+  n = 30,
+  sd = 5,
+  t_test_results = map_df(norm_list, t_test)
+) %>%
+  unnest(t_test_results) 
+```
+
+Repeat the above for μ={1,2,3,4,5,6}
+
+```{r}
+t_test_results = expand.grid(
+  iteration = 1:50,
+  n = 30,
+  sd = 5,
+  mu = 0:6
+  ) %>%
+  mutate(list_n = map(.x = mu, ~rnorm(n = 30, sd = 5, mean = .x))) %>%
+  mutate(ttest_results = map_df(list_n, t_test)) %>%
+  unnest(ttest_results) %>%
+  select(-list_n) %>%
+  mutate(reject_null = if_else(p.value < 0.05, 1, 0))
+```
+Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ on the x axis. Describe the association between effect size and power.
+
+```{r}
+t_test_results %>%
+  group_by(mu) %>%
+  summarize(reject_pr = sum(reject_null == "1")/n()) %>%
+  ggplot(aes(y = reject_pr, x = mu)) + geom_point()
+```
+
+Make a plot showing the average estimate of μ̂  on the y axis and the true value of μ on the x axis. Make a second plot (or overlay on the first) the average estimate of μ̂  only in samples for which the null was rejected on the y axis and the true value of μ on the x axis. Is the sample average of μ̂  across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?
+
+```{r}
+```
 
 
 ```{r}
 ```
+
+
 
