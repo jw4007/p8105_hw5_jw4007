@@ -104,7 +104,8 @@ city_results %>%
   )
 ``` 
 ### q3
-First set the following design elements:
+
+Set the following design elements:
 
 Fix n=30
 Fix σ=5
@@ -114,7 +115,7 @@ x∼Normal[μ,σ]
 First, create a list of 5000 data that follow x∼Normal[0,5] with the sample size equals to 30.
 ```{r}
 norm_list = vector("list", length = 50)
-for (i in 1:50) {
+for (i in 1:5000) {
   norm_list[[i]] = rnorm(n = 30, sd = 5, mean = 0)
 }
 ```
@@ -147,7 +148,7 @@ Repeat the above for μ={1,2,3,4,5,6}
 
 ```{r}
 t_test_results = expand.grid(
-  iteration = 1:50,
+  iteration = 1:5000,
   n = 30,
   sd = 5,
   mu = 0:6
@@ -156,7 +157,9 @@ t_test_results = expand.grid(
   mutate(ttest_results = map_df(list_n, t_test)) %>%
   unnest(ttest_results) %>%
   select(-list_n) %>%
-  mutate(reject_null = if_else(p.value < 0.05, 1, 0))
+  mutate(estimate = round(estimate, digits = 4),
+         p.value = round(p.value, digits = 4),
+         reject_null = if_else(p.value < 0.05, 1, 0))
 ```
 Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ on the x axis. Describe the association between effect size and power.
 
@@ -164,13 +167,29 @@ Make a plot showing the proportion of times the null was rejected (the power of 
 t_test_results %>%
   group_by(mu) %>%
   summarize(reject_pr = sum(reject_null == "1")/n()) %>%
-  ggplot(aes(y = reject_pr, x = mu)) + geom_point()
+  ggplot(aes(y = reject_pr, x = mu)) + geom_point() + 
+  labs( x = "true mean",
+       y = "power of the test")
 ```
+From the plot above, we can see that the bigger the effect size, the larger the power.
 
-Make a plot showing the average estimate of μ̂  on the y axis and the true value of μ on the x axis. Make a second plot (or overlay on the first) the average estimate of μ̂  only in samples for which the null was rejected on the y axis and the true value of μ on the x axis. Is the sample average of μ̂  across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?
 
 ```{r}
+df_1 = 
+  t_test_results %>% 
+  mutate(mu = as.factor(mu))
+
+df_2 = 
+  t_test_results %>% 
+  filter(reject_null == "1") %>%
+  mutate(mu = as.factor(mu))
+
+ggplot(data = df_1, aes(y = mean(estimate), x = mu)) + geom_point() + geom_point(data = df_2, color = "red") + labs(x = "mu",
+       y = "average estimate of μ hat")
+
+
 ```
+The above graph shows that the sample average of μ̂  across tests for which the null is rejected (red) does not equal to the true value of μ. It is because that the average estimate of μ̂ should be further from the null value for those observations to have the power to reject the null hypothesis.
 
 
 ```{r}
